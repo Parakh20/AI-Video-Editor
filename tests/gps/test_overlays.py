@@ -140,6 +140,40 @@ def test_render_functions_none_without_gps(tmp_path: Path) -> None:
     assert render_ride_stats_card(None, tmp_path / "b.png") is None
 
 
+def test_data_to_pixel_maps_corners() -> None:
+    from ai_video_editor.gps.overlays import OverlayGeometry, _data_to_pixel
+
+    geometry = OverlayGeometry(
+        x_data_range=(0.0, 10.0),
+        y_data_range=(0.0, 100.0),
+        bbox_px=(20.0, 10.0, 220.0, 110.0),
+    )
+    px, py = _data_to_pixel(0.0, 0.0, geometry)
+    assert px == pytest.approx(20.0)
+    assert py == pytest.approx(110.0)
+
+    px, py = _data_to_pixel(10.0, 100.0, geometry)
+    assert px == pytest.approx(220.0)
+    assert py == pytest.approx(10.0)
+
+    px, py = _data_to_pixel(5.0, 50.0, geometry)
+    assert px == pytest.approx(120.0)
+    assert py == pytest.approx(60.0)
+
+
+def test_data_to_pixel_degenerate_range_returns_bbox_center() -> None:
+    from ai_video_editor.gps.overlays import OverlayGeometry, _data_to_pixel
+
+    geometry = OverlayGeometry(
+        x_data_range=(5.0, 5.0),
+        y_data_range=(0.0, 0.0),
+        bbox_px=(0.0, 0.0, 100.0, 50.0),
+    )
+    px, py = _data_to_pixel(5.0, 0.0, geometry)
+    assert px == pytest.approx(50.0)
+    assert py == pytest.approx(25.0)
+
+
 # --- Time-synced (per-frame) telemetry overlay ------------------------------
 
 

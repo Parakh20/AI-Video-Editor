@@ -265,10 +265,47 @@ def build_timesynced_overlay(
 
 
 @dataclass(frozen=True)
+class OverlayGeometry:
+    """Maps a matplotlib axes' data space onto its rendered image's pixels."""
+
+    x_data_range: tuple[float, float]
+    y_data_range: tuple[float, float]
+    bbox_px: tuple[float, float, float, float]
+    """(left, top, right, bottom) in top-left-origin image-pixel space."""
+
+
+def _data_to_pixel(x: float, y: float, geometry: OverlayGeometry) -> tuple[float, float]:
+    """Map a data-space point to image-pixel coordinates via ``geometry``.
+
+    Falls back to the bbox center on a degenerate (zero-width or
+    zero-height) data range, to avoid a divide-by-zero.
+    """
+    x_lo, x_hi = geometry.x_data_range
+    y_lo, y_hi = geometry.y_data_range
+    left, top, right, bottom = geometry.bbox_px
+
+    x_span = x_hi - x_lo
+    if x_span == 0:
+        px = (left + right) / 2
+    else:
+        px = left + ((x - x_lo) / x_span) * (right - left)
+
+    y_span = y_hi - y_lo
+    if y_span == 0:
+        py = (top + bottom) / 2
+    else:
+        # Data y increases upward; image y increases downward.
+        py = bottom - ((y - y_lo) / y_span) * (bottom - top)
+
+    return px, py
+
+
+@dataclass(frozen=True)
 class OverlayImage:
     path: Path
     width: int
     height: int
+    geometry: OverlayGeometry | None = None
 
 
 def render_elevation_profile(
