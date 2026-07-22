@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 from typing import Annotated
@@ -13,10 +14,17 @@ from ai_video_editor.cli.config import load_config
 from ai_video_editor.cli.main import app
 from ai_video_editor.editing.decision_engine import EditAction
 from ai_video_editor.gps.metrics import compute_metrics
-from ai_video_editor.gps.overlays import build_timesynced_overlay
+from ai_video_editor.gps.overlays import (
+    build_elevation_marker_positions,
+    build_route_map_marker_positions,
+    build_timesynced_overlay,
+    render_elevation_profile,
+    render_marker_dot,
+    render_route_map,
+)
 from ai_video_editor.gps.parsers import load_track
-from ai_video_editor.render.presets import get_preset
-from ai_video_editor.render.renderer import RenderResult, render_edit_plan
+from ai_video_editor.render.presets import RenderPreset, get_preset
+from ai_video_editor.render.renderer import GraphicOverlaySpec, MarkerOverlaySpec, RenderResult, render_edit_plan
 from ai_video_editor.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -66,6 +74,58 @@ def _gps_overlay_fragment(
     return build_timesynced_overlay(metrics, output_duration)
 
 
+def _gps_graphic_overlays(
+    gps_path: Path | None,
+    kept: list[EditAction],
+    crossfade_s: float,
+    preset: RenderPreset,
+    work_dir: Path,
+) -> list[GraphicOverlaySpec]:
+    """Build the elevation-profile and route-map graphic overlays.
+
+    Renders the elevation-profile strip, route-map plot, and marker dot
+    into ``work_dir`` and returns the composited overlay specs -- empty
+    when GPS data is unavailable, mirroring :func:`_gps_overlay_fragment`.
+    """
+    if gps_path is None:
+        return []
+    track = load_track(gps_path)
+    metrics = compute_metrics(track)
+    if not metrics.samples:
+        return []
+
+    output_duration = _rendered_output_duration(kept, crossfade_s)
+    margin = 20
+    specs: list[GraphicOverlaySpec] = []
+
+    dot = render_marker_dot(work_dir / "marker_dot.png", radius_px=8)
+    dot_radius = dot.width / 2
+
+    elevation_image = render_elevation_profile(metrics, work_dir / "elevation_profile.png")
+    if elevation_image is not None and elevation_image.geometry is not None:
+        elev_x = (preset.width - elevation_image.width) // 2
+        elev_y = preset.height - elevation_image.height - margin
+        windows = build_elevation_marker_positions(metrics, elevation_image.geometry, output_duration)
+        centered = [
+            dataclasses.replace(w, x_px=w.x_px - dot_radius, y_px=w.y_px - dot_radius) for w in windows
+        ]
+        marker = MarkerOverlaySpec(image_path=dot.path, windows=centered) if centered else None
+        specs.append(GraphicOverlaySpec(image_path=elevation_image.path, x=elev_x, y=elev_y, marker=marker))
+
+    route_image = render_route_map(metrics, work_dir / "route_map.png")
+    if route_image is not None and route_image.geometry is not None:
+        route_x = preset.width - route_image.width - margin
+        route_y = preset.height - route_image.height - margin
+        windows = build_route_map_marker_positions(metrics, route_image.geometry, output_duration)
+        centered = [
+            dataclasses.replace(w, x_px=w.x_px - dot_radius, y_px=w.y_px - dot_radius) for w in windows
+        ]
+        marker = MarkerOverlaySpec(image_path=dot.path, windows=centered) if centered else None
+        specs.append(GraphicOverlaySpec(image_path=route_image.path, x=route_x, y=route_y, marker=marker))
+
+    return specs
+
+
 def run_render(
     edit_plan_path: Path,
     *,
@@ -94,12 +154,15 @@ def run_render(
         )
         return None
 
+    graphic_overlays = _gps_graphic_overlays(gps, kept_actions, crossfade_s, preset, output_path.parent)
+
     result = render_edit_plan(
         actions,
         output_path,
         preset,
         crossfade_s=crossfade_s,
         overlay_drawtext=overlay,
+        graphic_overlays=graphic_overlays,
         prefer_gpu=True,
     )
     return result

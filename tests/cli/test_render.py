@@ -94,3 +94,27 @@ def test_gps_overlay_fragment_none_without_gps(tmp_path: Path) -> None:
 
     kept = load_edit_plan_json(_write_edit_plan(tmp_path))
     assert _gps_overlay_fragment(None, kept, crossfade_s=0.5) is None
+
+
+def test_gps_graphic_overlays_builds_specs_with_gps(tmp_path: Path) -> None:
+    from ai_video_editor.cli.commands.render import _gps_graphic_overlays, load_edit_plan_json
+    from ai_video_editor.render.presets import get_preset
+
+    kept = load_edit_plan_json(_write_edit_plan(tmp_path))
+    preset = get_preset("1080p")
+    specs = _gps_graphic_overlays(FIXTURE_GPX, kept, crossfade_s=0.5, preset=preset, work_dir=tmp_path)
+    assert len(specs) == 2
+    for spec in specs:
+        assert spec.image_path.exists()
+        if spec.marker is not None:
+            assert spec.marker.image_path.exists()
+            assert len(spec.marker.windows) > 0
+
+
+def test_gps_graphic_overlays_empty_without_gps(tmp_path: Path) -> None:
+    from ai_video_editor.cli.commands.render import _gps_graphic_overlays, load_edit_plan_json
+    from ai_video_editor.render.presets import get_preset
+
+    kept = load_edit_plan_json(_write_edit_plan(tmp_path))
+    preset = get_preset("1080p")
+    assert _gps_graphic_overlays(None, kept, crossfade_s=0.5, preset=preset, work_dir=tmp_path) == []
