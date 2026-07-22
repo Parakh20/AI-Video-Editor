@@ -18,6 +18,7 @@ from ai_video_editor.gps.overlays import (
     heart_rate_overlay_text,
     power_overlay_text,
     render_elevation_profile,
+    render_marker_dot,
     render_route_map,
     render_ride_stats_card,
     speed_overlay_text,
@@ -147,6 +148,15 @@ def test_render_route_map_populates_geometry(real_metrics: RideMetrics, tmp_path
     left, top, right, bottom = result.geometry.bbox_px
     assert right > left
     assert bottom > top
+
+
+def test_render_marker_dot_creates_transparent_png(tmp_path: Path) -> None:
+    out = tmp_path / "dot.png"
+    result = render_marker_dot(out, radius_px=8, color="red")
+    assert out.exists()
+    assert out.stat().st_size > 0
+    assert result.width == 16
+    assert result.height == 16
 
 
 def test_render_ride_stats_card_real_fixture(real_metrics: RideMetrics, tmp_path: Path) -> None:

@@ -400,6 +400,30 @@ def render_route_map(
     return OverlayImage(path=output_path, width=size_px, height=size_px, geometry=geometry)
 
 
+def render_marker_dot(
+    output_path: Path,
+    *,
+    radius_px: int = 10,
+    color: str = "red",
+) -> OverlayImage:
+    """Render one small filled-circle PNG (transparent background).
+
+    Rendered once per render and reused across every window of a moving
+    marker overlay (see :func:`build_elevation_marker_positions` /
+    :func:`build_route_map_marker_positions`).
+    """
+    size = radius_px * 2
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.ellipse((0, 0, size - 1, size - 1), fill=color)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(output_path)
+
+    logger.info("render_marker_dot: wrote %s", output_path)
+    return OverlayImage(path=output_path, width=size, height=size)
+
+
 def render_ride_stats_card(
     metrics: RideMetrics | None,
     output_path: Path,
