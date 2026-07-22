@@ -118,3 +118,74 @@ def test_gps_graphic_overlays_empty_without_gps(tmp_path: Path) -> None:
     kept = load_edit_plan_json(_write_edit_plan(tmp_path))
     preset = get_preset("1080p")
     assert _gps_graphic_overlays(None, kept, crossfade_s=0.5, preset=preset, work_dir=tmp_path) == []
+
+
+def _spec_bbox(spec) -> tuple[int, int, int, int]:
+    """(x0, y0, x1, y1) bounding box for a GraphicOverlaySpec, read from its PNG."""
+    from PIL import Image
+
+    with Image.open(spec.image_path) as img:
+        width, height = img.size
+    return (spec.x, spec.y, spec.x + width, spec.y + height)
+
+
+def _boxes_overlap(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> bool:
+    ax0, ay0, ax1, ay1 = a
+    bx0, by0, bx1, by1 = b
+    return ax0 < bx1 and bx0 < ax1 and ay0 < by1 and by0 < ay1
+
+
+def test_gps_graphic_overlays_no_collision_on_vertical_preset(tmp_path: Path) -> None:
+    """Regression test: elevation strip and route map must not overlap on
+    narrow/vertical presets (e.g. instagram_reel, 1080x1920), where the
+    side-by-side bottom-center/bottom-right layout used for 16:9 presets
+    doesn't leave enough horizontal room."""
+    from ai_video_editor.cli.commands.render import _gps_graphic_overlays, load_edit_plan_json
+    from ai_video_editor.render.presets import get_preset
+
+    kept = load_edit_plan_json(_write_edit_plan(tmp_path))
+    preset = get_preset("instagram_reel")
+    specs = _gps_graphic_overlays(FIXTURE_GPX, kept, crossfade_s=0.5, preset=preset, work_dir=tmp_path)
+    assert len(specs) == 2
+
+    boxes = [_spec_bbox(spec) for spec in specs]
+    assert not _boxes_overlap(boxes[0], boxes[1])
+
+    for x0, y0, x1, y1 in boxes:
+        assert x0 >= 0
+        assert y0 >= 0
+        assert x1 <= preset.width
+        assert y1 <= preset.height
+
+
+def test_gps_graphic_overlays_landscape_layout_unchanged(tmp_path: Path) -> None:
+    """Landscape presets have enough width for the existing side-by-side
+    bottom-center (elevation) / bottom-right (route map) layout -- confirm
+    the fix doesn't regress the already-approved behavior."""
+    from ai_video_editor.cli.commands.render import _gps_graphic_overlays, load_edit_plan_json
+    from ai_video_editor.render.presets import get_preset
+
+    kept = load_edit_plan_json(_write_edit_plan(tmp_path))
+    preset = get_preset("1080p")
+    specs = _gps_graphic_overlays(FIXTURE_GPX, kept, crossfade_s=0.5, preset=preset, work_dir=tmp_path)
+    assert len(specs) == 2
+
+    elevation_spec, route_spec = specs
+    boxes = [_spec_bbox(spec) for spec in specs]
+    assert not _boxes_overlap(boxes[0], boxes[1])
+
+    # Side-by-side (not stacked): each box is independently bottom-anchored
+    # with the standard margin, rather than the route map sitting directly
+    # above the elevation strip.
+    margin = 20
+    _, elev_y0, _, elev_y1 = boxes[0]
+    _, route_y0, _, route_y1 = boxes[1]
+    assert elev_y1 == preset.height - margin
+    assert route_y1 == preset.height - margin
+    assert route_y0 != elev_y1 + margin  # not stacked directly above the strip
+
+    for x0, y0, x1, y1 in boxes:
+        assert x0 >= 0
+        assert y0 >= 0
+        assert x1 <= preset.width
+        assert y1 <= preset.height

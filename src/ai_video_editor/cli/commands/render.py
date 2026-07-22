@@ -102,9 +102,25 @@ def _gps_graphic_overlays(
     dot_radius = dot.width / 2
 
     elevation_image = render_elevation_profile(metrics, work_dir / "elevation_profile.png")
+    route_image = render_route_map(metrics, work_dir / "route_map.png")
+
+    # Elevation strip is bottom-center, route map is (normally) bottom-right.
+    # On narrow/vertical presets there isn't enough horizontal room for both
+    # side-by-side without their boxes overlapping (see review finding), so
+    # stack the route map directly above the elevation strip instead -- both
+    # stay bottom-anchored as a pair, just no longer sharing the same row.
+    stack_vertically = (
+        elevation_image is not None
+        and route_image is not None
+        and preset.width < elevation_image.width + route_image.width + 3 * margin
+    )
+
+    elev_y = preset.height - margin
+    if elevation_image is not None:
+        elev_y = preset.height - elevation_image.height - margin
+
     if elevation_image is not None and elevation_image.geometry is not None:
         elev_x = (preset.width - elevation_image.width) // 2
-        elev_y = preset.height - elevation_image.height - margin
         windows = build_elevation_marker_positions(metrics, elevation_image.geometry, output_duration)
         centered = [
             dataclasses.replace(w, x_px=w.x_px - dot_radius, y_px=w.y_px - dot_radius) for w in windows
@@ -112,10 +128,12 @@ def _gps_graphic_overlays(
         marker = MarkerOverlaySpec(image_path=dot.path, windows=centered) if centered else None
         specs.append(GraphicOverlaySpec(image_path=elevation_image.path, x=elev_x, y=elev_y, marker=marker))
 
-    route_image = render_route_map(metrics, work_dir / "route_map.png")
     if route_image is not None and route_image.geometry is not None:
         route_x = preset.width - route_image.width - margin
-        route_y = preset.height - route_image.height - margin
+        if stack_vertically:
+            route_y = elev_y - route_image.height - margin
+        else:
+            route_y = preset.height - route_image.height - margin
         windows = build_route_map_marker_positions(metrics, route_image.geometry, output_duration)
         centered = [
             dataclasses.replace(w, x_px=w.x_px - dot_radius, y_px=w.y_px - dot_radius) for w in windows
@@ -154,7 +172,10 @@ def run_render(
         )
         return None
 
-    graphic_overlays = _gps_graphic_overlays(gps, kept_actions, crossfade_s, preset, output_path.parent)
+    overlays_work_dir = output_path.parent / f"{output_path.stem}_gps_overlays"
+    if gps is not None:
+        overlays_work_dir.mkdir(parents=True, exist_ok=True)
+    graphic_overlays = _gps_graphic_overlays(gps, kept_actions, crossfade_s, preset, overlays_work_dir)
 
     result = render_edit_plan(
         actions,
