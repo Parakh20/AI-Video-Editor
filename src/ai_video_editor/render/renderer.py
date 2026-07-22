@@ -287,6 +287,7 @@ def render_edit_plan(
     *,
     crossfade_s: float = _DEFAULT_CROSSFADE_S,
     overlay_drawtext: str | None = None,
+    graphic_overlays: Sequence[GraphicOverlaySpec] = (),
     prefer_gpu: bool = True,
     ffmpeg_bin: str = "ffmpeg",
 ) -> RenderResult:
@@ -304,7 +305,12 @@ def render_edit_plan(
 
     input_args, clip_inputs = _build_inputs(kept)
     filter_complex, v_label, a_label = _build_filter_complex(
-        kept, clip_inputs, preset, crossfade_s=crossfade_s, overlay_drawtext=overlay_drawtext
+        kept,
+        clip_inputs,
+        preset,
+        crossfade_s=crossfade_s,
+        overlay_drawtext=overlay_drawtext,
+        graphic_overlays=graphic_overlays,
     )
 
     encoders_to_try = ["h264_nvenc", "libx264"] if prefer_gpu else ["libx264"]

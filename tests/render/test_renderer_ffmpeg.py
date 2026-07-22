@@ -135,6 +135,34 @@ def test_render_with_drawtext_overlay(synthetic_clips: list[Path], tmp_path: Pat
     assert result.output_path.stat().st_size > 0
 
 
+def test_render_with_graphic_overlay(synthetic_clips: list[Path], tmp_path: Path) -> None:
+    from PIL import Image
+
+    from ai_video_editor.render.renderer import GraphicOverlaySpec
+
+    bg_path = tmp_path / "bg.png"
+    Image.new("RGBA", (100, 50), (255, 0, 0, 180)).save(bg_path)
+
+    clip_a, _ = synthetic_clips
+    actions = [
+        EditAction(
+            kind="keep",
+            video_path=str(clip_a),
+            start_seconds=0.0,
+            end_seconds=2.0,
+            source_shot_indices=[0],
+            explanation="test clip with graphic overlay",
+        ),
+    ]
+    output = tmp_path / "graphic_overlay.mp4"
+    spec = GraphicOverlaySpec(image_path=bg_path, x=20, y=20)
+    result = render_edit_plan(
+        actions, output, get_preset("1080p"), graphic_overlays=[spec], prefer_gpu=False
+    )
+    assert result.output_path.exists()
+    assert result.output_path.stat().st_size > 0
+
+
 def test_nvenc_encode_if_available(synthetic_clips: list[Path], tmp_path: Path) -> None:
     if not _has_nvenc():
         pytest.skip("h264_nvenc not available in this ffmpeg build")
