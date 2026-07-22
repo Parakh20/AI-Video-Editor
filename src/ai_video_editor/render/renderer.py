@@ -38,6 +38,16 @@ logger = get_logger(__name__)
 _DEFAULT_CROSSFADE_S = 0.5
 
 
+def _escape_filter_path(path: Path) -> str:
+    """Escape a filesystem path for safe interpolation into an ffmpeg filtergraph.
+
+    ffmpeg filtergraph syntax treats `:`, `'`, `\`, and other characters as
+    structural tokens within filter option values. This function escapes them
+    to prevent the path from corrupting the filter graph string.
+    """
+    return str(path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+
+
 @dataclass(frozen=True)
 class RenderResult:
     output_path: Path
@@ -173,7 +183,7 @@ def _build_graphic_overlay_fragments(
     parts: list[str] = []
     for i, spec in enumerate(graphic_overlays):
         bg_label = f"bg{i}"
-        parts.append(f"movie={spec.image_path}[{bg_label}]")
+        parts.append(f"movie={_escape_filter_path(spec.image_path)}[{bg_label}]")
         next_v = f"gv{i}"
         parts.append(f"[{acc_v}][{bg_label}]overlay={spec.x}:{spec.y}[{next_v}]")
         acc_v = next_v
@@ -183,7 +193,7 @@ def _build_graphic_overlay_fragments(
 
         windows = spec.marker.windows
         dot_src = f"dotsrc{i}"
-        parts.append(f"movie={spec.marker.image_path}[{dot_src}]")
+        parts.append(f"movie={_escape_filter_path(spec.marker.image_path)}[{dot_src}]")
         dot_labels = [f"dot{i}_{j}" for j in range(len(windows))]
         if len(dot_labels) == 1:
             parts.append(f"[{dot_src}]copy[{dot_labels[0]}]")
