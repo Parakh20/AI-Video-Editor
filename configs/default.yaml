@@ -1,0 +1,34 @@
+# Default tunables for the AI Video Editor pipeline.
+# CLI flags override these; this file is loaded via `cli.config.load_config`.
+
+scoring:
+  # Weights: see ai_video_editor.analysis.scoring.ScoreWeights for meaning.
+  # Omit a key to keep its dataclass default.
+  visual_quality: 0.20
+  stability: 0.10
+  motion: 0.20
+  scenery: 0.10
+  lighting: 0.10
+  gps_speed: 0.05
+  gps_events: 0.05
+  audio_quality: 0.08
+  speech_penalty: 0.02
+  music_sync: 0.10
+
+decision:
+  score_threshold: 30.0
+  merge_gap_tolerance: 1.0
+  beat_tolerance: 0.15
+  trim_seconds: 0.15
+
+scene_detection:
+  threshold: 27.0
+  min_shot_duration: 0.5
+
+subtitles:
+  whisper_model_size: base
+
+render:
+  default_preset: 1080p
+  fps: 29.97
+  crossfade_seconds: 0.5
