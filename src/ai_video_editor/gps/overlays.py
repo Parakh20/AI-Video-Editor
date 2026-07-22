@@ -513,3 +513,35 @@ def build_elevation_marker_positions(
         x_px, y_px = _data_to_pixel(distance_m / 1000, elevation_m, geometry)
         result.append(MarkerWindow(start_s=w.start_s, end_s=w.end_s, x_px=x_px, y_px=y_px))
     return result
+
+
+def build_route_map_marker_positions(
+    metrics: RideMetrics | None,
+    geometry: OverlayGeometry,
+    output_duration_s: float,
+    *,
+    update_interval_s: float = 1.0,
+    max_windows: int = _DEFAULT_MAX_WINDOWS,
+) -> list[MarkerWindow]:
+    """Per-window pixel positions for a dot moving along the route-map plot.
+
+    Tracks lat/lon against the route-map plot's ``geometry`` (see
+    :func:`render_route_map`). Returns ``[]`` when ``metrics`` has no
+    samples or ``output_duration_s`` is non-positive.
+    """
+    if metrics is None or not metrics.samples:
+        return []
+    if output_duration_s <= 0:
+        return []
+
+    windows = _time_windows(output_duration_s, metrics.duration_s, update_interval_s, max_windows)
+
+    result: list[MarkerWindow] = []
+    for w in windows:
+        lon = _interpolate(metrics, w.ride_elapsed_s, "lon")
+        lat = _interpolate(metrics, w.ride_elapsed_s, "lat")
+        if lon is None or lat is None:
+            continue
+        x_px, y_px = _data_to_pixel(lon, lat, geometry)
+        result.append(MarkerWindow(start_s=w.start_s, end_s=w.end_s, x_px=x_px, y_px=y_px))
+    return result

@@ -322,3 +322,28 @@ def test_build_elevation_marker_positions_empty_for_nonpositive_duration(real_me
 
     geometry = OverlayGeometry(x_data_range=(0.0, 1.0), y_data_range=(0.0, 1.0), bbox_px=(0.0, 0.0, 1.0, 1.0))
     assert build_elevation_marker_positions(real_metrics, geometry, 0.0) == []
+
+
+def test_build_route_map_marker_positions_returns_one_window_per_interval(real_metrics: RideMetrics) -> None:
+    from ai_video_editor.gps.overlays import OverlayGeometry, build_route_map_marker_positions
+
+    lats = [s.lat for s in real_metrics.samples]
+    lons = [s.lon for s in real_metrics.samples]
+    geometry = OverlayGeometry(
+        x_data_range=(min(lons), max(lons)),
+        y_data_range=(min(lats), max(lats)),
+        bbox_px=(0.0, 0.0, 300.0, 300.0),
+    )
+    windows = build_route_map_marker_positions(real_metrics, geometry, output_duration_s=6.0, update_interval_s=2.0)
+    assert len(windows) == 3
+    for w in windows:
+        assert 0.0 <= w.x_px <= 300.0
+        assert 0.0 <= w.y_px <= 300.0
+
+
+def test_build_route_map_marker_positions_empty_without_metrics() -> None:
+    from ai_video_editor.gps.overlays import OverlayGeometry, build_route_map_marker_positions
+
+    geometry = OverlayGeometry(x_data_range=(0.0, 1.0), y_data_range=(0.0, 1.0), bbox_px=(0.0, 0.0, 1.0, 1.0))
+    assert build_route_map_marker_positions(None, geometry, 10.0) == []
+    assert build_route_map_marker_positions(RideMetrics(samples=[]), geometry, 10.0) == []
