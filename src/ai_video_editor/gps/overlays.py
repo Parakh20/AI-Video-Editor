@@ -468,3 +468,48 @@ def render_ride_stats_card(
 
     logger.info("render_ride_stats_card: wrote %s", output_path)
     return OverlayImage(path=output_path, width=width_px, height=height_px)
+
+
+@dataclass(frozen=True)
+class MarkerWindow:
+    """One time-gated pixel position for a moving marker overlay."""
+
+    start_s: float
+    end_s: float
+    x_px: float
+    y_px: float
+
+
+def build_elevation_marker_positions(
+    metrics: RideMetrics | None,
+    geometry: OverlayGeometry,
+    output_duration_s: float,
+    *,
+    update_interval_s: float = 1.0,
+    max_windows: int = _DEFAULT_MAX_WINDOWS,
+) -> list[MarkerWindow]:
+    """Per-window pixel positions for a dot moving along the elevation curve.
+
+    Tracks cumulative ride distance against the elevation-profile plot's
+    ``geometry`` (see :func:`render_elevation_profile`). Returns ``[]`` when
+    ``metrics`` has no samples, no elevation data at all, or
+    ``output_duration_s`` is non-positive.
+    """
+    if metrics is None or not metrics.samples:
+        return []
+    if all(s.elevation_m is None for s in metrics.samples):
+        return []
+    if output_duration_s <= 0:
+        return []
+
+    windows = _time_windows(output_duration_s, metrics.duration_s, update_interval_s, max_windows)
+
+    result: list[MarkerWindow] = []
+    for w in windows:
+        distance_m = _interpolate(metrics, w.ride_elapsed_s, "distance_m")
+        elevation_m = _interpolate(metrics, w.ride_elapsed_s, "elevation_m")
+        if distance_m is None or elevation_m is None:
+            continue
+        x_px, y_px = _data_to_pixel(distance_m / 1000, elevation_m, geometry)
+        result.append(MarkerWindow(start_s=w.start_s, end_s=w.end_s, x_px=x_px, y_px=y_px))
+    return result

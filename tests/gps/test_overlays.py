@@ -291,3 +291,34 @@ def test_build_timesynced_overlay_stretches_ride_across_output(
     km_values = [float(m) for m in re.findall(r"([0-9.]+) km", overlay)]
     assert len(km_values) == 4
     assert km_values[-1] >= km_values[0]
+
+
+# --- Graphical marker positions ----------------------------------------------
+
+
+def test_build_elevation_marker_positions_moves_with_distance(real_metrics: RideMetrics) -> None:
+    from ai_video_editor.gps.overlays import OverlayGeometry, build_elevation_marker_positions
+
+    geometry = OverlayGeometry(
+        x_data_range=(0.0, real_metrics.total_distance_m / 1000),
+        y_data_range=(0.0, 500.0),
+        bbox_px=(0.0, 0.0, 800.0, 200.0),
+    )
+    windows = build_elevation_marker_positions(real_metrics, geometry, output_duration_s=6.0, update_interval_s=2.0)
+    assert len(windows) == 3
+    assert windows[-1].x_px >= windows[0].x_px
+
+
+def test_build_elevation_marker_positions_empty_without_metrics() -> None:
+    from ai_video_editor.gps.overlays import OverlayGeometry, build_elevation_marker_positions
+
+    geometry = OverlayGeometry(x_data_range=(0.0, 1.0), y_data_range=(0.0, 1.0), bbox_px=(0.0, 0.0, 1.0, 1.0))
+    assert build_elevation_marker_positions(None, geometry, 10.0) == []
+    assert build_elevation_marker_positions(RideMetrics(samples=[]), geometry, 10.0) == []
+
+
+def test_build_elevation_marker_positions_empty_for_nonpositive_duration(real_metrics: RideMetrics) -> None:
+    from ai_video_editor.gps.overlays import OverlayGeometry, build_elevation_marker_positions
+
+    geometry = OverlayGeometry(x_data_range=(0.0, 1.0), y_data_range=(0.0, 1.0), bbox_px=(0.0, 0.0, 1.0, 1.0))
+    assert build_elevation_marker_positions(real_metrics, geometry, 0.0) == []
