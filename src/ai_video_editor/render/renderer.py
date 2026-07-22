@@ -24,10 +24,12 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from ai_video_editor.editing.decision_engine import EditAction
+from ai_video_editor.gps.overlays import MarkerWindow
 from ai_video_editor.render.presets import AspectMode, RenderPreset
 from ai_video_editor.utils.logging import get_logger
 
@@ -65,6 +67,28 @@ class _ClipInputs:
     video_input_index: int
     audio_input_index: int
     audio_synthesized: bool
+
+
+@dataclass(frozen=True)
+class MarkerOverlaySpec:
+    """A moving-dot marker composited over a :class:`GraphicOverlaySpec`."""
+
+    image_path: Path
+    windows: list[MarkerWindow]
+    """Positions are relative to the parent GraphicOverlaySpec's own (x, y);
+    the caller is responsible for centering (e.g. subtracting the dot's own
+    half-width/half-height) before constructing this spec."""
+
+
+@dataclass(frozen=True)
+class GraphicOverlaySpec:
+    """A static background image (e.g. elevation profile) plus an optional
+    moving marker, composited into the render at a fixed screen position."""
+
+    image_path: Path
+    x: int
+    y: int
+    marker: MarkerOverlaySpec | None = None
 
 
 def _build_inputs(kept: list[EditAction]) -> tuple[list[str], list[_ClipInputs]]:
@@ -134,6 +158,52 @@ def _scale_and_fit_filter(preset: RenderPreset) -> str:
     )
 
 
+def _build_graphic_overlay_fragments(
+    acc_v: str,
+    graphic_overlays: Sequence[GraphicOverlaySpec],
+) -> tuple[list[str], str]:
+    """Build filter fragments compositing background images + moving markers.
+
+    Each background image loads via ``movie=`` (no extra ffmpeg ``-i``
+    needed) and composites once at a fixed screen position. An optional
+    marker dot is split into one copy per time window and chained as
+    individually time-gated ``overlay`` filters, mirroring how the text
+    overlay chains gated ``drawtext`` filters.
+    """
+    parts: list[str] = []
+    for i, spec in enumerate(graphic_overlays):
+        bg_label = f"bg{i}"
+        parts.append(f"movie={spec.image_path}[{bg_label}]")
+        next_v = f"gv{i}"
+        parts.append(f"[{acc_v}][{bg_label}]overlay={spec.x}:{spec.y}[{next_v}]")
+        acc_v = next_v
+
+        if spec.marker is None or not spec.marker.windows:
+            continue
+
+        windows = spec.marker.windows
+        dot_src = f"dotsrc{i}"
+        parts.append(f"movie={spec.marker.image_path}[{dot_src}]")
+        dot_labels = [f"dot{i}_{j}" for j in range(len(windows))]
+        if len(dot_labels) == 1:
+            parts.append(f"[{dot_src}]copy[{dot_labels[0]}]")
+        else:
+            fanout = "".join(f"[{label}]" for label in dot_labels)
+            parts.append(f"[{dot_src}]split={len(dot_labels)}{fanout}")
+
+        for j, (window, dot_label) in enumerate(zip(windows, dot_labels, strict=True)):
+            marker_out = f"mk{i}_{j}"
+            x = spec.x + window.x_px
+            y = spec.y + window.y_px
+            parts.append(
+                f"[{acc_v}][{dot_label}]overlay={x:.1f}:{y:.1f}:"
+                f"enable='between(t,{window.start_s:.3f},{window.end_s:.3f})'[{marker_out}]"
+            )
+            acc_v = marker_out
+
+    return parts, acc_v
+
+
 def _build_filter_complex(
     kept: list[EditAction],
     clip_inputs: list[_ClipInputs],
@@ -141,6 +211,7 @@ def _build_filter_complex(
     *,
     crossfade_s: float,
     overlay_drawtext: str | None,
+    graphic_overlays: Sequence[GraphicOverlaySpec] = (),
 ) -> tuple[str, str, str]:
     """Build the filter_complex graph string plus final video/audio labels."""
     fit = _scale_and_fit_filter(preset)
@@ -178,6 +249,9 @@ def _build_filter_complex(
         final_v = "vout"
         parts.append(f"[{acc_v}]{overlay_drawtext}[{final_v}]")
         acc_v = final_v
+
+    graphic_parts, acc_v = _build_graphic_overlay_fragments(acc_v, graphic_overlays)
+    parts += graphic_parts
 
     return ";".join(parts), acc_v, acc_a
 
