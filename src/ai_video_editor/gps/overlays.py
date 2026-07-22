@@ -340,12 +340,20 @@ def render_elevation_profile(
     ax.axis("off")
     fig.tight_layout(pad=0)
 
+    fig.canvas.draw()
+    bbox = ax.get_window_extent(renderer=fig.canvas.get_renderer())
+    geometry = OverlayGeometry(
+        x_data_range=ax.get_xlim(),
+        y_data_range=ax.get_ylim(),
+        bbox_px=(bbox.x0, height_px - bbox.y1, bbox.x1, height_px - bbox.y0),
+    )
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, transparent=True, dpi=dpi)
     plt.close(fig)
 
     logger.info("render_elevation_profile: wrote %s", output_path)
-    return OverlayImage(path=output_path, width=width_px, height=height_px)
+    return OverlayImage(path=output_path, width=width_px, height=height_px, geometry=geometry)
 
 
 def render_route_map(
@@ -376,12 +384,20 @@ def render_route_map(
     ax.axis("off")
     fig.tight_layout(pad=0)
 
+    fig.canvas.draw()
+    bbox = ax.get_window_extent(renderer=fig.canvas.get_renderer())
+    geometry = OverlayGeometry(
+        x_data_range=ax.get_xlim(),
+        y_data_range=ax.get_ylim(),
+        bbox_px=(bbox.x0, size_px - bbox.y1, bbox.x1, size_px - bbox.y0),
+    )
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, transparent=True, dpi=dpi)
     plt.close(fig)
 
     logger.info("render_route_map: wrote %s", output_path)
-    return OverlayImage(path=output_path, width=size_px, height=size_px)
+    return OverlayImage(path=output_path, width=size_px, height=size_px, geometry=geometry)
 
 
 def render_ride_stats_card(

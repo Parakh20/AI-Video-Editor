@@ -119,12 +119,34 @@ def test_render_elevation_profile_real_fixture(real_metrics: RideMetrics, tmp_pa
     assert out.stat().st_size > 0
 
 
+def test_render_elevation_profile_populates_geometry(real_metrics: RideMetrics, tmp_path: Path) -> None:
+    out = tmp_path / "elev.png"
+    result = render_elevation_profile(real_metrics, out)
+    assert result is not None
+    assert result.geometry is not None
+    x_lo, x_hi = result.geometry.x_data_range
+    assert x_hi > x_lo
+    left, top, right, bottom = result.geometry.bbox_px
+    assert right > left
+    assert bottom > top
+
+
 def test_render_route_map_real_fixture(real_metrics: RideMetrics, tmp_path: Path) -> None:
     out = tmp_path / "route.png"
     result = render_route_map(real_metrics, out)
     assert result is not None
     assert out.exists()
     assert out.stat().st_size > 0
+
+
+def test_render_route_map_populates_geometry(real_metrics: RideMetrics, tmp_path: Path) -> None:
+    out = tmp_path / "route.png"
+    result = render_route_map(real_metrics, out)
+    assert result is not None
+    assert result.geometry is not None
+    left, top, right, bottom = result.geometry.bbox_px
+    assert right > left
+    assert bottom > top
 
 
 def test_render_ride_stats_card_real_fixture(real_metrics: RideMetrics, tmp_path: Path) -> None:
