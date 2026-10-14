@@ -21,12 +21,15 @@ def runner() -> CliRunner:
 @pytest.fixture
 def smallest_real_clip() -> Path:
     """The smallest real clip in assets/raw, for fast real-data smoke tests."""
+    # Real footage is multi-GB and not committed; is_file() also drops dangling
+    # symlinks, so a fresh clone (or CI) skips these tests instead of erroring.
+    candidates = REAL_RAW_DIR.iterdir() if REAL_RAW_DIR.is_dir() else iter(())
     clips = sorted(
-        (p for p in REAL_RAW_DIR.iterdir() if p.suffix.upper() == ".MP4"),
+        (p for p in candidates if p.suffix.upper() == ".MP4" and p.is_file()),
         key=lambda p: p.stat().st_size,
     )
     if not clips:
-        pytest.skip("No real clips available under assets/raw")
+        pytest.skip("No real clips available under assets/raw (footage is not committed)")
     return clips[0]
 
 

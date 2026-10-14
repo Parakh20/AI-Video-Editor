@@ -1,8 +1,22 @@
+import os
 from pathlib import Path
 
 import pytest
 
 from ai_video_editor.audio.subtitle_generation import generate_subtitles
+
+
+def _whisper_model_cached(name: str) -> bool:
+    """Whether whisper.load_model(name) would load from disk instead of downloading."""
+    cache_root = Path(os.getenv("XDG_CACHE_HOME", Path.home() / ".cache"))
+    return (cache_root / "whisper" / f"{name}.pt").is_file()
+
+
+pytestmark = pytest.mark.skipif(
+    not _whisper_model_cached("tiny"),
+    reason="Whisper 'tiny' model is not cached locally; skipped to avoid a model download "
+    "in CI. Enable with: python -c \"import whisper; whisper.load_model('tiny')\"",
+)
 
 
 @pytest.mark.slow
