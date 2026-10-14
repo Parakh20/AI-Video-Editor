@@ -75,7 +75,9 @@ def test_render_dry_run_reports_gps_overlay(runner: CliRunner, tmp_path: Path) -
         ],
     )
     assert result.exit_code == 0, result.output
-    assert "with gps overlay" in result.output.lower()
+    # Rich wraps long lines at the terminal width (CI paths are long), so
+    # compare with whitespace collapsed.
+    assert "with gps overlay" in " ".join(result.output.lower().split())
 
 
 def test_gps_overlay_fragment_is_time_synced(tmp_path: Path) -> None:
