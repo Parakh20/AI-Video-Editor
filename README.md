@@ -1,5 +1,8 @@
 # AI Video Editor
 
+[![CI](https://github.com/Parakh20/AI-Video-Editor/actions/workflows/ci.yml/badge.svg)](https://github.com/Parakh20/AI-Video-Editor/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 An AI-powered production pipeline that turns a folder of raw cycling POV
 footage into a cinematically edited video: scene/highlight detection, beat
 synchronized cuts, subtitles, GPS overlays, chapter markers, an
@@ -12,17 +15,47 @@ video-editor full ./assets/raw
 
 ## Quickstart
 
+Requires **Python 3.12** and **ffmpeg** on `PATH`. An NVIDIA GPU is optional:
+rendering uses NVENC when the ffmpeg build has it and falls back to libx264
+otherwise. See `docs/installation.md` for details.
+
+**Option A: uv, CUDA 12.4 build of PyTorch** (several GB of downloads)
+
 ```bash
-./scripts/setup.sh                  # installs uv (if missing) and syncs the venv
-./scripts/run.sh --help              # or: source .venv/bin/activate && video-editor --help
-./scripts/run.sh full assets/raw --limit 2 --dry-run   # plan without encoding
-./scripts/run.sh full assets/raw --music assets/music/your_song.mp3
+./scripts/setup.sh                  # installs uv if missing, runs `uv sync --dev`
+./scripts/run.sh --help             # or: source .venv/bin/activate && video-editor --help
 ```
 
-Requires **Python 3.12**, **ffmpeg** (with `h264_nvenc`/`hevc_nvenc` +
-`vidstab` for GPU encoding and stabilization — optional but recommended), and
-an **NVIDIA GPU + driver** for hardware-accelerated encoding/inference
-(falls back to CPU automatically otherwise). See `docs/installation.md`.
+**Option B: pip, CPU-only PyTorch** (what CI uses)
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/pip install --upgrade pip
+.venv/bin/pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cpu
+.venv/bin/pip install "setuptools<81" wheel
+.venv/bin/pip install --no-build-isolation openai-whisper==20240930
+.venv/bin/pip install -e . --group dev
+.venv/bin/video-editor --help
+```
+
+**Run it.** Raw footage is not part of the repo. Put your clips in
+`assets/raw/` (and an optional song in `assets/music/`), or generate a
+12-second synthetic test clip:
+
+```bash
+ffmpeg -f lavfi -i testsrc2=duration=12:size=1280x720:rate=30 \
+       -f lavfi -i sine=frequency=440:duration=12 \
+       -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest assets/raw/sample.mp4
+
+video-editor full assets/raw --skip-subtitles      # writes everything to output/
+video-editor full assets/raw --limit 2 --dry-run   # plan every stage without encoding
+video-editor full assets/raw --music assets/music/your_song.mp3
+```
+
+`full` writes `scores.json`, `edit_plan.json`, `timeline.otio`,
+`project.kdenlive` and `final_render_<preset>.mp4` to `output/`. Subtitles
+use Whisper (`base` by default, set in `configs/default.yaml`); the model is
+downloaded on first use.
 
 ## Commands
 
@@ -89,27 +122,44 @@ See `docs/architecture.md` for the full module map and design decisions.
   fallback, presets for 1080p/1440p/4K/YouTube/Instagram Reel/YouTube
   Shorts.
 
+## Project structure
+
+```
+src/ai_video_editor/
+  cli/          Typer CLI (video-editor), one module per command, config loading
+  vision/       shot detection, highlights, blur/sharpness, shake, flow, brightness, scene/day-night
+  audio/        beats/tempo, speech and silence detection, Whisper subtitles, music sections
+  gps/          GPX/FIT parsing, ride metrics, event detection, telemetry overlays
+  analysis/     weighted, explainable shot scoring
+  editing/      decision engine (keep/drop/merge/trim/beat-align) and effects
+  timeline/     OpenTimelineIO builder and Kdenlive (MLT XML) export
+  render/       ffmpeg renderer and output presets
+  utils/        logging and video I/O helpers
+configs/default.yaml   scoring weights, decision thresholds, model sizes
+scripts/        setup/run/update wrappers and manual smoke scripts for real footage
+tests/          pytest suite mirroring the package layout, plus a synthetic GPX fixture
+docs/           architecture, developer guide, installation, editor integration, report
+assets/raw, assets/music   your footage and music (gitignored)
+```
+
+Configuration lives in `configs/default.yaml`; there are no environment
+variables or API keys.
+
 ## Known limitations
 
-- **Kdenlive is not installed in this development environment** (`apt
-  install kdenlive` needs sudo, not automatable from here) — `project.kdenlive`
-  is validated as well-formed MLT XML with the expected structure, but has
-  not been opened in the Kdenlive GUI. See `docs/editor_integration.md` for
-  the exact verification command.
-- **DaVinci Resolve Studio integration is designed for, but not active.**
-  A `davinci-resolve-mcp` server is already installed and configured on this
-  machine, but only the free edition of Resolve is licensed here, so its
-  scripting API is unavailable until Resolve Studio is activated.
-- **No GPS telemetry exists for the real test footage** (`assets/raw`, a
-  real cycling ride with no GPX/FIT recording) — GPS overlay/scoring code
-  is fully implemented and tested against a synthetic fixture
-  (`tests/fixtures/sample_ride.gpx`), but has no real ride data to run
-  against in this project as-is.
+- **Kdenlive projects are checked structurally, not in the GUI.**
+  `project.kdenlive` is validated as well-formed MLT XML with the expected
+  structure. See `docs/editor_integration.md` for the verification command.
+- **DaVinci Resolve and Premiere export are not implemented.** The
+  `EditAction`/OTIO representation is designed so they can be added later.
+- **GPS features are tested on a synthetic ride.** The original test footage
+  had no GPX/FIT recording, so GPS scoring and overlays are exercised against
+  `tests/fixtures/sample_ride.gpx`.
 - **Whisper transcribes wind/engine noise into low-value text on
-  non-speech action-cam audio** by design of the underlying model — this is
-  expected behavior on this kind of footage, not a bug.
-- Full-resolution analysis of many multi-gigabyte 4K clips is
-  compute/time-intensive; use `--limit`/`--max-clip-seconds` for iteration.
+  non-speech action-cam audio.** That is how the model behaves on this kind
+  of footage.
+- Full-resolution analysis of many multi-gigabyte 4K clips is slow; use
+  `--limit`/`--max-clip-seconds` while iterating.
 
 ## Development
 
@@ -119,7 +169,18 @@ See `docs/architecture.md` for the full module map and design decisions.
 .venv/bin/python -m mypy src/
 ```
 
+Tests build synthetic video, audio and GPX fixtures, so they need ffmpeg but
+no footage, GPU or network. Tests that need inputs which are not in the repo
+skip with a reason: the CLI smoke tests run only when real clips are in
+`assets/raw/`, and the Whisper tests run only when the `tiny` model is
+already cached (`python -c "import whisper; whisper.load_model('tiny')"`).
+CI runs ruff and the test suite on every push and pull request.
+
 See `docs/developer_guide.md` for how to add a new analysis signal, render
 preset, or editor export target, and `docs/final_report.md` for the full
 project report (folder tree, architecture/dependency diagrams, benchmarks,
 future work).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
