@@ -41,7 +41,7 @@ _DEFAULT_CROSSFADE_S = 0.5
 def _escape_filter_path(path: Path) -> str:
     """Escape a filesystem path for safe interpolation into an ffmpeg filtergraph.
 
-    ffmpeg filtergraph syntax treats `:`, `'`, `\`, and other characters as
+    ffmpeg filtergraph syntax treats `:`, `'`, `\\`, and other characters as
     structural tokens within filter option values. This function escapes them
     to prevent the path from corrupting the filter graph string.
     """

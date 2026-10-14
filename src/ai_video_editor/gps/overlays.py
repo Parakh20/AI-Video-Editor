@@ -341,7 +341,7 @@ def render_elevation_profile(
     fig.tight_layout(pad=0)
 
     fig.canvas.draw()
-    bbox = ax.get_window_extent(renderer=fig.canvas.get_renderer())
+    bbox = ax.get_window_extent()
     geometry = OverlayGeometry(
         x_data_range=ax.get_xlim(),
         y_data_range=ax.get_ylim(),
@@ -385,7 +385,7 @@ def render_route_map(
     fig.tight_layout(pad=0)
 
     fig.canvas.draw()
-    bbox = ax.get_window_extent(renderer=fig.canvas.get_renderer())
+    bbox = ax.get_window_extent()
     geometry = OverlayGeometry(
         x_data_range=ax.get_xlim(),
         y_data_range=ax.get_ylim(),
