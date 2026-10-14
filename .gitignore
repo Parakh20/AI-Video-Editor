@@ -18,3 +18,15 @@ logs/
 .pytest_cache/
 *.mp4
 
+*.MP4
+*.mp3
+
+# Local footage and music (large, personal, not redistributable)
+assets/raw/*
+assets/music/*
+!assets/raw/.gitkeep
+!assets/music/.gitkeep
+
+# Local working dirs created by scripts/setup.sh
+/cache/
+/models/
